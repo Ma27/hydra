@@ -152,17 +152,34 @@ sub findLog {
     my ($c, $drvPath, @outPaths) = @_;
 
     if (defined $drvPath) {
+        unless ($c->user_exists) {
+            my $existsForGuest = $c->model('DB::BuildSteps')->search(
+                {"me.drvpath" => $drvPath, "project.private" => 0},
+                {join => {build => "project"}}
+            );
+            if ($existsForGuest == 0) {
+                forceLogin($c);
+            }
+        }
+
         my $logPath = getDrvLogPath($drvPath);
         return $logPath if defined $logPath;
     }
 
     return undef if scalar @outPaths == 0;
 
+    my $join = ["buildstepoutputs"];
+    my $criteria = { path => { -in => [@outPaths] } };
+    unless ($c->user_exists) {
+        push @{$join}, {"build" => "project"};
+        $criteria->{"project.private"} = 0;
+    }
+
     my @steps = $c->model('DB::BuildSteps')->search(
-        { path => { -in => [@outPaths] } },
+        $criteria,
         { select => ["drvpath"]
         , distinct => 1
-        , join => "buildstepoutputs"
+        , join => $join
         });
 
     foreach my $step (@steps) {
@@ -226,10 +243,19 @@ sub getEvalInfo {
 sub getEvals {
     my ($self, $c, $evals, $offset, $rows) = @_;
 
-    my @evals = $evals->search(
-        { hasnewbuilds => 1 },
-        { order_by => "me.id DESC", rows => $rows, offset => $offset
-        , prefetch => { evaluationerror => [  ] } });
+    my $criteria = { hasnewbuilds => 1 };
+    my $extra = {
+        order_by => "me.id DESC",
+        rows => $rows,
+        offset => $offset,
+        prefetch => { evaluationerror => [  ] }
+    };
+    unless ($c->user_exists) {
+        $extra->{join} = {"jobset" => "project"};
+        $criteria->{"project.private"} = 0;
+    }
+
+    my @evals = $evals->search($criteria, $extra);
     my @res = ();
     my $cache = {};
 
