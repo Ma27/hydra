@@ -81,3 +81,23 @@ if (scalar(@usersWithSha1s) > 0) {
         $user->setPassword($user->password);
     }
 }
+
+my $column_check = $db->storage->dbh->prepare(<<QUERY);
+SELECT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'projects'
+    AND column_name = 'private'
+);
+QUERY
+
+$column_check->execute();
+if ($column_check->fetchrow_array == 0) {
+    print STDERR "adding `private' column to Projects table...\n";
+    print STDERR "not doing that in upgrade-* as it's not part of upstream yet.\n";
+
+    my $stmt = $db->storage->dbh->prepare(<<QUERY);
+alter table Projects
+  add column private integer not null default 0;
+QUERY
+    $stmt->execute();
+}
