@@ -29,6 +29,7 @@ our @EXPORT = qw(
     approxTableSize
     requireLocalStore
     dbh
+    checkProjectVisibleForGuest
 );
 
 
@@ -257,6 +258,13 @@ sub requireProjectOwner {
     requireUser($c);
     accessDenied($c, "Only the project members or administrators can perform this operation.")
         unless isProjectOwner($c, $project);
+}
+
+sub checkProjectVisibleForGuest {
+    my ($c, $project) = @_;
+    if ($project->private == 1) {
+        requireUser($c);
+    }
 }
 
 
