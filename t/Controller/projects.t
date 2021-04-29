@@ -54,7 +54,8 @@ subtest "Read project 'tests'" => sub {
             file => "",
             type => "",
             value => ""
-        }
+        },
+        "private" => JSON::false
     });
 };
 
@@ -98,7 +99,8 @@ subtest "Transitioning from declarative project to normal" => sub {
                 file => "bogus",
                 type => "boolean",
                 value => "false"
-            }
+            },
+            "private" => JSON::false
         });
     };
 
@@ -141,7 +143,8 @@ subtest "Transitioning from declarative project to normal" => sub {
                 file => "",
                 type => "",
                 value => ""
-            }
+            },
+            "private" => JSON::false
         });
     };
 };
