@@ -282,6 +282,9 @@ sub as_json {
     );
 
     return \%json;
+
+sub json_hint {
+    return \%hint;
 }
 
 1;
