@@ -321,6 +321,7 @@
                 EmailSender
                 FileSlurp
                 FileWhich
+                HTMLTreeBuilderXPath
                 IOCompress
                 IPCRun
                 JSON
