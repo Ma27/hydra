@@ -49,7 +49,7 @@ subtest "Read project 'tests'" => sub {
         homepage => "",
         jobsets => [],
         name => "tests",
-        owner => "root"
+        owner => "root",
         "private" => JSON::false
     });
 };
@@ -133,7 +133,7 @@ subtest "Transitioning from declarative project to normal" => sub {
             homepage => "",
             jobsets => [],
             name => "tests",
-            owner => "root"
+            owner => "root",
             "private" => JSON::false
         });
     };
