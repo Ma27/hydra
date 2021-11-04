@@ -1,5 +1,6 @@
 use feature 'unicode_strings';
 use strict;
+use warnings;
 use Setup;
 use JSON qw(decode_json encode_json);
 
@@ -50,11 +51,6 @@ subtest "Read project 'tests'" => sub {
         jobsets => [],
         name => "tests",
         owner => "root",
-        declarative => {
-            file => "",
-            type => "",
-            value => ""
-        },
         "private" => JSON::false
     });
 };
@@ -139,11 +135,6 @@ subtest "Transitioning from declarative project to normal" => sub {
             jobsets => [],
             name => "tests",
             owner => "root",
-            declarative => {
-                file => "",
-                type => "",
-                value => ""
-            },
             "private" => JSON::false
         });
     };

@@ -167,7 +167,7 @@ sub status :Local :Args(0) :ActionClass('REST') { }
 sub status_GET {
     my ($self, $c) = @_;
     my $criteria = { "buildsteps.busy" => { '!=', 0 } };
-    my @join = ["buildsteps"];
+    my @join = ("buildsteps");
     unless ($c->user_exists) {
         $criteria->{"project.private"} = 0;
         push @join, "project";
@@ -429,7 +429,7 @@ sub evals :Local Args(0) {
     $c->stash->{page} = $page;
     $c->stash->{resultsPerPage} = $resultsPerPage;
     $c->stash->{total} = $evals->search({hasnewbuilds => 1})->count;
-    $c->stash->{evals} = getEvals($self, $c, $evals, ($page - 1) * $resultsPerPage, $resultsPerPage);
+    $c->stash->{evals} = getEvals($c, $evals, ($page - 1) * $resultsPerPage, $resultsPerPage);
 
     $self->status_ok($c, entity => $c->stash->{evals});
 }

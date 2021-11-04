@@ -1,10 +1,12 @@
 package Hydra::Helper::Nix;
 
 use strict;
+use warnings;
 use Exporter;
 use File::Path;
 use File::Basename;
 use Config::General;
+use Hydra::Config;
 use Hydra::Helper::CatalystUtils;
 use Hydra::Model::DB;
 use Nix::Store;
@@ -41,11 +43,9 @@ my $hydraConfig;
 sub getHydraConfig {
     return $hydraConfig if defined $hydraConfig;
     my $conf = $ENV{"HYDRA_CONFIG"} || (Hydra::Model::DB::getHydraPath . "/hydra.conf");
+    my %opts = (%Hydra::Config::configGeneralOpts, -ConfigFile => $conf);
     if (-f $conf) {
-        my %h = new Config::General( -ConfigFile => $conf
-                                   , -UseApacheInclude => 1
-                                   , -IncludeAgain => 1
-                                   )->getall;
+        my %h = Config::General->new(%opts)->getall;
 
         $hydraConfig = \%h;
     } else {
@@ -66,9 +66,45 @@ sub getStatsdConfig {
     my %statsd = defined $cfg ? ref $cfg eq "HASH" ? %$cfg : ($cfg) : ();
 
     return {
-        "host" => %statsd{'host'}  // 'localhost',
-        "port" => %statsd{'port'}  // 8125,
+        "host" => $statsd{'host'}  // 'localhost',
+        "port" => $statsd{'port'}  // 8125,
     }
+}
+
+sub getHydraNotifyPrometheusConfig {
+    my ($config) = @_;
+    my $cfg = $config->{hydra_notify};
+
+    if (!defined($cfg)) {
+        return undef;
+    }
+
+    if (ref $cfg ne "HASH") {
+        print STDERR "Error reading Hydra's configuration file: hydra_notify should be a block.\n";
+        return undef;
+    }
+
+    my $promcfg = $cfg->{prometheus};
+    if (!defined($promcfg)) {
+        return undef;
+    }
+
+    if (ref $promcfg ne "HASH") {
+        print STDERR "Error reading Hydra's configuration file: hydra_notify.prometheus should be a block.\n";
+        return undef;
+    }
+
+    if (defined($promcfg->{"listen_address"}) && defined($promcfg->{"port"})) {
+        return {
+            "listen_address" => $promcfg->{'listen_address'},
+            "port" => $promcfg->{'port'},
+        };
+    } else {
+        print STDERR "Error reading Hydra's configuration file: hydra_notify.prometheus should include listen_address and port.\n";
+        return undef;
+    }
+
+    return undef;
 }
 
 
@@ -105,8 +141,8 @@ sub registerRoot {
     my ($path) = @_;
     my $link = gcRootFor $path;
     return if -e $link;
-    open ROOT, ">$link" or die "cannot create GC root `$link' to `$path'";
-    close ROOT;
+    open(my $root, ">", $link) or die "cannot create GC root `$link' to `$path'";
+    close $root;
 }
 
 
@@ -240,12 +276,41 @@ sub getEvalInfo {
 }
 
 
+=head2 getEvals
+
+This method returns a list of evaluations with details about what changed,
+intended to be used with `eval.tt`.
+
+Arguments:
+
+=over 4
+
+=item C<$c>
+L<Hydra> - the entire application.
+
+=item C<$evals_result_set>
+
+A L<DBIx::Class::ResultSet> for the result class of L<Hydra::Model::DB::JobsetEvals>
+
+=item C<$offset>
+
+Integer offset when selecting evaluations
+
+=item C<$rows>
+
+Integer rows to fetch
+
+=back
+
+=cut
 sub getEvals {
-    my ($self, $c, $evals, $offset, $rows) = @_;
+    my ($c, $evals_result_set, $offset, $rows) = @_;
+
+    my $me = $evals_result_set->current_source_alias;
 
     my $criteria = { hasnewbuilds => 1 };
     my $extra = {
-        order_by => "me.id DESC",
+        order_by => "$me.id DESC",
         rows => $rows,
         offset => $offset,
         prefetch => { evaluationerror => [  ] }
@@ -255,7 +320,8 @@ sub getEvals {
         $criteria->{"project.private"} = 0;
     }
 
-    my @evals = $evals->search($criteria, $extra);
+    my @evals = $evals_result_set->search($criteria, $extra);
+
     my @res = ();
     my $cache = {};
 
@@ -267,7 +333,8 @@ sub getEvals {
             { order_by => "id DESC", rows => 1 });
 
         my $curInfo = getEvalInfo($cache, $curEval);
-        my $prevInfo = getEvalInfo($cache, $prevEval) if defined $prevEval;
+        my $prevInfo;
+        $prevInfo = getEvalInfo($cache, $prevEval) if defined $prevEval;
 
         # Compute what inputs changed between each eval.
         my @changedInputs;
@@ -302,13 +369,21 @@ sub getMachines {
 
     for my $machinesFile (@machinesFiles) {
         next unless -e $machinesFile;
-        open CONF, "<$machinesFile" or die;
-        while (<CONF>) {
-            chomp;
-            s/\#.*$//g;
-            next if /^\s*$/;
-            my @tokens = split /\s/, $_;
+        open(my $conf, "<", $machinesFile) or die;
+        while (my $line = <$conf>) {
+            chomp($line);
+            $line =~ s/\#.*$//g;
+            next if $line =~ /^\s*$/;
+            my @tokens = split /\s+/, $line;
+
+            if (!defined($tokens[5]) || $tokens[5] eq "-") {
+                $tokens[5] = "";
+            }
             my @supportedFeatures = split(/,/, $tokens[5] || "");
+
+            if (!defined($tokens[6]) || $tokens[6] eq "-") {
+                $tokens[6] = "";
+            }
             my @mandatoryFeatures = split(/,/, $tokens[6] || "");
             $machines{$tokens[0]} =
                 { systemTypes => [ split(/,/, $tokens[1]) ]
@@ -319,7 +394,7 @@ sub getMachines {
                 , mandatoryFeatures => [ @mandatoryFeatures ]
                 };
         }
-        close CONF;
+        close $conf;
     }
 
     return \%machines;
@@ -448,7 +523,7 @@ sub getTotalShares {
 }
 
 
-sub cancelBuilds($$) {
+sub cancelBuilds {
     my ($db, $builds) = @_;
     return $db->txn_do(sub {
         $builds = $builds->search({ finished => 0 });
@@ -465,7 +540,7 @@ sub cancelBuilds($$) {
 }
 
 
-sub restartBuilds($$) {
+sub restartBuilds {
     my ($db, $builds) = @_;
 
     $builds = $builds->search({ finished => 1 });

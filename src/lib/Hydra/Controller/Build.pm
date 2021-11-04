@@ -8,7 +8,6 @@ use Hydra::Helper::Nix;
 use Hydra::Helper::CatalystUtils;
 use File::Basename;
 use File::stat;
-use File::Slurp;
 use Data::Dump qw(dump);
 use Nix::Store;
 use Nix::Config;
@@ -104,6 +103,19 @@ sub build_GET {
     $c->stash->{steps} = [$build->buildsteps->search({}, {order_by => "stepnr desc"})];
 
     $c->stash->{binaryCachePublicUri} = $c->config->{binary_cache_public_uri};
+}
+
+sub constituents :Chained('buildChain') :PathPart('constituents') :Args(0) :ActionClass('REST') { }
+
+sub constituents_GET {
+    my ($self, $c) = @_;
+
+    my $build = $c->stash->{build};
+
+    $self->status_ok(
+        $c,
+        entity => [$build->constituents_->search({}, {order_by => ["job"]})]
+    );
 }
 
 
@@ -477,7 +489,7 @@ sub restart : Chained('buildChain') PathPart Args(0) {
     my ($self, $c) = @_;
     my $build = $c->stash->{build};
     requireRestartPrivileges($c, $build->project);
-    my $n = restartBuilds($c->model('DB')->schema, $c->model('DB::Builds')->search({ id => $build->id }));
+    my $n = restartBuilds($c->model('DB')->schema, $c->model('DB::Builds')->search_rs({ id => $build->id }));
     error($c, "This build cannot be restarted.") if $n != 1;
     $c->flash->{successMsg} = "Build has been restarted.";
     $c->res->redirect($c->uri_for($self->action_for("build"), $c->req->captures));
@@ -488,7 +500,7 @@ sub cancel : Chained('buildChain') PathPart Args(0) {
     my ($self, $c) = @_;
     my $build = $c->stash->{build};
     requireCancelBuildPrivileges($c, $build->project);
-    my $n = cancelBuilds($c->model('DB')->schema, $c->model('DB::Builds')->search({ id => $build->id }));
+    my $n = cancelBuilds($c->model('DB')->schema, $c->model('DB::Builds')->search_rs({ id => $build->id }));
     error($c, "This build cannot be cancelled.") if $n != 1;
     $c->flash->{successMsg} = "Build has been cancelled.";
     $c->res->redirect($c->uri_for($self->action_for("build"), $c->req->captures));
@@ -560,7 +572,7 @@ sub evals : Chained('buildChain') PathPart('evals') Args(0) {
     $c->stash->{page} = $page;
     $c->stash->{resultsPerPage} = $resultsPerPage;
     $c->stash->{total} = $evals->search({hasnewbuilds => 1})->count;
-    $c->stash->{evals} = getEvals($self, $c, $evals, ($page - 1) * $resultsPerPage, $resultsPerPage)
+    $c->stash->{evals} = getEvals($c, $evals, ($page - 1) * $resultsPerPage, $resultsPerPage)
 }
 
 
