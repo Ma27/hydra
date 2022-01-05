@@ -423,7 +423,7 @@ sub pathIsInsidePrefix {
 
         # ‘..’ should not take us outside of the prefix.
         if ($c eq "..") {
-            return if length($cur) <= length($prefix);
+            return undef if length($cur) <= length($prefix);
             $cur =~ s/\/[^\/]*$// or die; # remove last component
             next;
         }

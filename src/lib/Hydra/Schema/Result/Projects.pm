@@ -254,7 +254,7 @@ __PACKAGE__->many_to_many("usernames", "projectmembers", "username");
 # Created by DBIx::Class::Schema::Loader v0.07049 @ 2021-10-29 20:52:46
 # DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:zh+ccEbTfH0WypoHW+FPSw
 
-use JSON;
+use JSON::MaybeXS;
 
 sub as_json {
     my $self = shift;
@@ -268,9 +268,9 @@ sub as_json {
         "owner" => $self->get_column("owner") // "",
 
         # boolean_columns
-        "enabled" => $self->get_column("enabled") ? JSON::true : JSON::false,
-        "hidden" => $self->get_column("hidden") ? JSON::true : JSON::false,
-        "private" => $self->get_column("private") ? JSON::true : JSON::false,
+        "enabled" => $self->get_column("enabled") ? JSON::MaybeXS::true : JSON::MaybeXS::false,
+        "hidden" => $self->get_column("hidden") ? JSON::MaybeXS::true : JSON::MaybeXS::false,
+        "private" => $self->get_column("private") ? JSON::MaybeXS::true : JSON::MaybeXS::false,
 
         "jobsets" => [ map { $_->name } $self->jobsets ]
     );
