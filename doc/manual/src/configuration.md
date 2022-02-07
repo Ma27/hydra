@@ -4,6 +4,13 @@ Configuration
 This chapter is a collection of configuration snippets for different
 scenarios.
 
+The configuration is parsed by `Config::General` which has [a pretty
+thorough documentation on their file format](https://metacpan.org/pod/Config::General#CONFIG-FILE-FORMAT).
+Hydra calls the parser with the following options:
+- `-UseApacheInclude => 1`
+- `-IncludeAgain => 1`
+- `-IncludeRelative => 1`
+
 Including files
 ---------------
 
@@ -126,7 +133,7 @@ general any LDAP group of the form *hydra\_some\_role* (notice the
       binddn: "cn=root,dc=example"
       bindpw: notapassword
       start_tls: 0
-      start_tls_options
+      start_tls_options:
         verify:  none
       user_basedn: "ou=users,dc=example"
       user_filter: "(&(objectClass=inetOrgPerson)(cn=%s))"
@@ -142,3 +149,12 @@ general any LDAP group of the form *hydra\_some\_role* (notice the
       role_value: dn
       role_search_options:
         deref: always
+
+Embedding Extra HTML
+--------------------
+
+Embed an analytics widget or other HTML in the `<head>` of each HTML document via:
+
+```conf
+tracker = <script src="...">
+```

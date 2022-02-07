@@ -13,23 +13,37 @@ use Nix::Store;
 use Encode;
 use Sys::Hostname::Long;
 use IPC::Run;
+use UUID4::Tiny qw(is_uuid4_string);
 
 our @ISA = qw(Exporter);
 our @EXPORT = qw(
-    getHydraHome getHydraConfig getBaseUrl
-    getSCMCacheDir getStatsdConfig
-    registerRoot getGCRootsDir gcRootFor
-    jobsetOverview jobsetOverview_
-    getDrvLogPath findLog
-    getMainOutput
+    cancelBuilds
+    captureStdoutStderr
+    captureStdoutStderrWithStdin
+    constructRunCommandLogPath
+    findLog
+    gcRootFor
+    getBaseUrl
+    getDrvLogPath
     getEvals getMachines
-    pathIsInsidePrefix
-    captureStdoutStderr run grab
-    getTotalShares
+    getGCRootsDir
+    getHydraConfig
+    getHydraHome
+    getMainOutput
+    getSCMCacheDir
+    getStatsdConfig
     getStoreUri
-    readNixFile
+    getTotalShares
+    grab
     isLocalStore
-    cancelBuilds restartBuilds);
+    jobsetOverview
+    jobsetOverview_
+    pathIsInsidePrefix
+    readNixFile
+    registerRoot
+    restartBuilds
+    run
+    );
 
 
 sub getHydraHome {
@@ -444,14 +458,19 @@ sub pathIsInsidePrefix {
 
 sub captureStdoutStderr {
     my ($timeout, @cmd) = @_;
-    my $stdin = "";
+
+    return captureStdoutStderrWithStdin($timeout, \@cmd, "");
+}
+
+sub captureStdoutStderrWithStdin {
+    my ($timeout, $cmd, $stdin) = @_;
     my $stdout;
     my $stderr;
 
     eval {
         local $SIG{ALRM} = sub { die "timeout\n" }; # NB: \n required
         alarm $timeout;
-        IPC::Run::run(\@cmd, \$stdin, \$stdout, \$stderr);
+        IPC::Run::run($cmd, \$stdin, \$stdout, \$stderr);
         alarm 0;
         1;
     } or do {
@@ -595,8 +614,22 @@ sub readNixFile {
 
 sub isLocalStore {
     my $uri = getStoreUri();
-    return $uri =~ "^(local|daemon|auto)";
+    return $uri =~ "^(local|daemon|auto|file)";
 }
 
+
+sub constructRunCommandLogPath {
+    my ($runlog) = @_;
+    my $uuid = $runlog->uuid;
+
+    if (!is_uuid4_string($uuid)) {
+        die "UUID was invalid."
+    }
+
+    my $hydra_path = Hydra::Model::DB::getHydraPath;
+    my $bucket = substr($uuid, 0, 2);
+
+    return "$hydra_path/runcommand-logs/$bucket/$uuid";
+}
 
 1;

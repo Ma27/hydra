@@ -2,6 +2,7 @@
   description = "A Nix-based continuous build system";
 
   inputs.nixpkgs.follows = "nix/nixpkgs";
+  inputs.nix.url = github:NixOS/nix/2.6.0;
 
   outputs = { self, nixpkgs, nix }:
     let
@@ -432,6 +433,20 @@
               license = with final.lib.licenses; [ artistic1 gpl1Plus ];
             };
           };
+
+          UUID4Tiny = final.buildPerlPackage {
+            pname = "UUID4-Tiny";
+            version = "0.002";
+            src = final.fetchurl {
+              url = "mirror://cpan/authors/id/C/CV/CVLIBRARY/UUID4-Tiny-0.002.tar.gz";
+              sha256 = "e7535b31e386d432dec7adde214348389e1d5cf753e7ed07f1ae04c4360840cf";
+            };
+            meta = {
+              description = "Cryptographically secure v4 UUIDs for Linux x64";
+              license = with final.lib.licenses; [ artistic1 gpl1Plus ];
+            };
+          };
+
         };
 
         hydra = with final; let
@@ -475,6 +490,7 @@
                 HTMLTreeBuilderXPath
                 IOCompress
                 IPCRun
+                IPCRun3
                 JSON
                 JSONMaybeXS
                 JSONXS
@@ -496,11 +512,13 @@
                 StringCompareConstantTime
                 SysHostnameLong
                 TermSizeAny
+                TermReadKey
                 Test2Harness
                 TestMore
                 TestPostgreSQL
                 TextDiff
                 TextTable
+                UUID4Tiny
                 XMLSimple
                 YAML
               ];
@@ -517,7 +535,7 @@
               gitAndTools.topGit mercurial darcs subversion breezy openssl bzip2 libxslt
               final.nix perlDeps perl mdbook pixz
               boost
-              postgresql_11
+              postgresql_13
               (if lib.versionAtLeast lib.version "20.03pre"
                then nlohmann_json
                else nlohmann_json.override { multipleHeaders = true; })
@@ -869,9 +887,16 @@
 
               services.openldap.enable = true;
               services.openldap.settings.children = {
+                "cn=schema".includes = [
+                  "${pkgs.openldap}/etc/schema/core.ldif"
+                  "${pkgs.openldap}/etc/schema/cosine.ldif"
+                  "${pkgs.openldap}/etc/schema/inetorgperson.ldif"
+                  "${pkgs.openldap}/etc/schema/nis.ldif"
+                ];
+
                 "olcDatabase={1}mdb".attrs = {
                   objectClass = [ "olcDatabaseConfig" "olcMdbConfig" ];
-                  database = "{1}mdbg";
+                  olcDatabase = "{1}mdb";
                   olcSuffix = "dc=example";
                   olcRootDN = "cn=root,dc=example";
                   olcRootPW = "notapassword";
@@ -907,6 +932,12 @@
                 objectClass: groupOfNames
                 member: cn=admin,ou=users,dc=example
 
+                dn: cn=hydra-admin,ou=groups,dc=example
+                cn: hydra-admin
+                description: Users who are NOT Hydra Admins because the prefix needs to be a _
+                objectClass: groupOfNames
+                member: cn=notadmin,ou=users,dc=example
+
                 dn: cn=user,ou=users,dc=example
                 objectClass: organizationalPerson
                 objectClass: inetOrgPerson
@@ -922,6 +953,15 @@
                 cn: admin
                 mail: admin@example
                 userPassword: {SSHA}BsgOQcRnoiULzwLrGmuzVGH6EC5Dkwmf
+
+                dn: cn=notadmin,ou=users,dc=example
+                objectClass: organizationalPerson
+                objectClass: inetOrgPerson
+                sn: notadmin
+                cn: notadmin
+                mail: notadmin@example
+                userPassword: {SSHA}BsgOQcRnoiULzwLrGmuzVGH6EC5Dkwmf
+
               '';
               systemd.services.hydra-server.environment.CATALYST_DEBUG = "1";
               systemd.services.hydra-server.environment.HYDRA_LDAP_CONFIG = pkgs.writeText "config.yaml"
@@ -934,7 +974,9 @@
                   store:
                     class: LDAP
                     ldap_server: localhost
-                    ldap_server_options.timeout: 30
+                    ldap_server_options:
+                      timeout: 30
+                      debug: 2
                     binddn: "cn=root,dc=example"
                     bindpw: notapassword
                     start_tls: 0
@@ -954,38 +996,57 @@
                     role_value: dn
                     role_search_options:
                       deref: always
-                  '';
+                '';
               networking.firewall.enable = false;
             };
             testScript = ''
               import json
+              from pprint import pprint
 
               machine.wait_for_unit("openldap.service")
               machine.wait_for_job("hydra-init")
               machine.wait_for_open_port("3000")
+
+              print("Logging in as a regular user:")
               response = machine.succeed(
                   "curl --fail http://localhost:3000/login -H 'Accept: application/json' -H 'Referer: http://localhost:3000' --data 'username=user&password=foobar'"
               )
 
               response_json = json.loads(response)
+              pprint(response_json)
               assert "user" == response_json["username"]
               assert "user@example" == response_json["emailaddress"]
               assert len(response_json["userroles"]) == 0
 
               # logging on with wrong credentials shouldn't work
+              print("Logging in with bad creds:")
               machine.fail(
                   "curl --fail http://localhost:3000/login -H 'Accept: application/json' -H 'Referer: http://localhost:3000' --data 'username=user&password=wrongpassword'"
               )
 
+
               # the admin user should get the admin role from his group membership in `hydra_admin`
+              print("Logging in as an admin user:")
               response = machine.succeed(
                   "curl --fail http://localhost:3000/login -H 'Accept: application/json' -H 'Referer: http://localhost:3000' --data 'username=admin&password=password'"
               )
 
               response_json = json.loads(response)
+              pprint(response_json)
               assert "admin" == response_json["username"]
               assert "admin@example" == response_json["emailaddress"]
               assert "admin" in response_json["userroles"]
+
+              # the notadmin user should NOT get the admin role from their group membership in `hydra-admin`
+              response = machine.succeed(
+                  "curl --fail http://localhost:3000/login -H 'Accept: application/json' -H 'Referer: http://localhost:3000' --data 'username=notadmin&password=password'"
+              )
+
+              response_json = json.loads(response)
+              pprint(response_json)
+              assert "notadmin" == response_json["username"]
+              assert "notadmin@example" == response_json["emailaddress"]
+              assert "admin" not in response_json["userroles"]
             '';
           };
 

@@ -80,8 +80,8 @@ sub project_DELETE {
     requireProjectOwner($c, $c->stash->{project});
 
     $c->model('DB')->schema->txn_do(sub {
-        $c->stash->{project}->jobsets->delete;
         $c->stash->{project}->builds->delete;
+        $c->stash->{project}->jobsets->delete;
         $c->stash->{project}->delete;
     });
 
@@ -165,6 +165,8 @@ sub updateProject {
         , declvalue => trim($c->stash->{params}->{declarative}->{value})
         });
     if (length($project->declfile)) {
+        # This logic also exists in the DeclarativeJobets tests.
+        # TODO: refactor and deduplicate.
         $project->jobsets->update_or_create(
             { name=> ".jobsets"
             , nixexprinput => ""
