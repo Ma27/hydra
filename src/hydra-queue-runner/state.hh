@@ -12,6 +12,7 @@
 #include "parsed-derivations.hh"
 #include "pathlocks.hh"
 #include "pool.hh"
+#include "build-result.hh"
 #include "store-api.hh"
 #include "sync.hh"
 #include "nar-extractor.hh"
@@ -342,6 +343,7 @@ private:
     nix::Pool<Connection> dbPool;
 
     /* The build machines. */
+    std::mutex machinesReadyLock;
     typedef std::map<std::string, Machine::ptr> Machines;
     nix::Sync<Machines> machines; // FIXME: use atomic_shared_ptr
 
