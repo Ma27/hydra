@@ -40,6 +40,17 @@ sub buildChain :Chained('/') :PathPart('build') :CaptureArgs(1) {
 
     checkProjectVisibleForGuest($c, $c->stash->{project});
     $c->stash->{runcommandlogs} = [$c->stash->{build}->runcommandlogs->search({}, {order_by => ["id DESC"]})];
+
+    $c->stash->{runcommandlogProblem} = undef;
+    if ($c->stash->{job} =~ qr/^runCommandHook\..*/) {
+        if (!$c->config->{dynamicruncommand}->{enable}) {
+            $c->stash->{runcommandlogProblem} = "disabled-server";
+        } elsif (!$c->stash->{project}->enable_dynamic_run_command) {
+            $c->stash->{runcommandlogProblem} = "disabled-project";
+        } elsif (!$c->stash->{jobset}->enable_dynamic_run_command) {
+            $c->stash->{runcommandlogProblem} = "disabled-jobset";
+        }
+    }
 }
 
 

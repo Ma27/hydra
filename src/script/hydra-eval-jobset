@@ -619,7 +619,7 @@ sub checkJobsetWrapped {
             } else {
                 # Update the jobset with the spec's inputs, and the continue
                 # evaluating the .jobsets jobset.
-                updateDeclarativeJobset($db, $project, ".jobsets", $declSpec);
+                updateDeclarativeJobset($config, $db, $project, ".jobsets", $declSpec);
                 $jobset->discard_changes;
                 $inputInfo->{"declInput"} = [ $declInput ];
                 $inputInfo->{"projectName"} = [ fetchInput($plugins, $db, $project, $jobset, "projectName", "string", $project->name, 0) ];
@@ -799,7 +799,13 @@ sub checkJobsetWrapped {
 
             foreach my $job (values %{$jobs}) {
                 next unless $job->{constituents};
-                my $x = $drvPathToId{$job->{drvPath}} or die;
+
+                if (defined $job->{error}) {
+                    die "aggregate job ‘$job->{jobName}’ failed with the error: $job->{error}\n";
+                }
+
+                my $x = $drvPathToId{$job->{drvPath}} or
+                    die "aggregate job ‘$job->{jobName}’ has no corresponding build record.\n";
                 foreach my $drvPath (@{$job->{constituents}}) {
                     my $constituent = $drvPathToId{$drvPath};
                     if (defined $constituent) {

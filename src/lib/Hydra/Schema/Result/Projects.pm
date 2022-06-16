@@ -94,6 +94,12 @@ __PACKAGE__->table("projects");
   data_type: 'text'
   is_nullable: 1
 
+=head2 enable_dynamic_run_command
+
+  data_type: 'boolean'
+  default_value: false
+  is_nullable: 0
+
 =cut
 
 __PACKAGE__->add_columns(
@@ -119,6 +125,8 @@ __PACKAGE__->add_columns(
   { data_type => "text", is_nullable => 1 },
   "declvalue",
   { data_type => "text", is_nullable => 1 },
+  "enable_dynamic_run_command",
+  { data_type => "boolean", default_value => \"false", is_nullable => 0 },
 );
 
 =head1 PRIMARY KEY
@@ -236,8 +244,8 @@ Composing rels: L</projectmembers> -> username
 __PACKAGE__->many_to_many("usernames", "projectmembers", "username");
 
 
-# Created by DBIx::Class::Schema::Loader v0.07049 @ 2022-02-06 15:14:44
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:x+hz0bJru4aJltaMZu46wA
+# Created by DBIx::Class::Schema::Loader v0.07049 @ 2022-06-16 14:03:24
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:6VVcyxtBZDHJtKQ4NBXiIA
 
 use JSON::MaybeXS;
 
@@ -245,6 +253,12 @@ sub builds {
   my ($self) = @_;
   return $self->jobsets->related_resultset('builds');
 };
+
+sub supportsDynamicRunCommand {
+  my ($self) = @_;
+
+  return $self->get_column('enable_dynamic_run_command') == 1;
+}
 
 sub as_json {
     my $self = shift;
@@ -259,6 +273,7 @@ sub as_json {
 
         # boolean_columns
         "enabled" => $self->get_column("enabled") ? JSON::MaybeXS::true : JSON::MaybeXS::false,
+        "enable_dynamic_run_command" => $self->get_column("enable_dynamic_run_command") ? JSON::MaybeXS::true : JSON::MaybeXS::false,
         "hidden" => $self->get_column("hidden") ? JSON::MaybeXS::true : JSON::MaybeXS::false,
         "private" => $self->get_column("private") ? JSON::MaybeXS::true : JSON::MaybeXS::false,
 

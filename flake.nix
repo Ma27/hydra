@@ -1,13 +1,16 @@
 {
   description = "A Nix-based continuous build system";
 
+  # FIXME: All the pinned versions of nix/nixpkgs have a broken foreman (yes,
+  # even 2.7.0's Nixpkgs pin).
+  inputs.newNixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable-small";
   inputs.nixpkgs.follows = "nix/nixpkgs";
-  inputs.nix.url = github:NixOS/nix/2.7.0;
+  inputs.nix.url = github:NixOS/nix/2.9.1;
 
-  outputs = { self, nixpkgs, nix }:
+  outputs = { self, newNixpkgs, nixpkgs, nix }:
     let
 
-      version = "${builtins.readFile ./version.txt}.${builtins.substring 0 8 self.lastModifiedDate}.${self.shortRev or "DIRTY"}";
+      version = "${builtins.readFile ./version.txt}.${builtins.substring 0 8 (self.lastModifiedDate or "19700101")}.${self.shortRev or "DIRTY"}";
 
       pkgs = import nixpkgs {
         system = "x86_64-linux";
@@ -37,6 +40,19 @@
 
       # A Nixpkgs overlay that provides a 'hydra' package.
       overlay = final: prev: {
+
+        # Overlay these packages to use dependencies from the Nixpkgs everything
+        # else uses, to side-step the version difference: glibc is 2.32 in the
+        # nix-pinned Nixpkgs, but 2.33 in the newNixpkgs commit.
+        civetweb = (final.callPackage "${newNixpkgs}/pkgs/development/libraries/civetweb" { }).overrideAttrs
+          # Can be dropped once newNixpkgs points to a revision containing
+          # https://github.com/NixOS/nixpkgs/pull/167751
+          ({ cmakeFlags ? [ ], ... }: {
+            cmakeFlags = cmakeFlags ++ [
+              "-DCIVETWEB_ENABLE_IPV6=1"
+            ];
+          });
+        prometheus-cpp = final.callPackage "${newNixpkgs}/pkgs/development/libraries/prometheus-cpp" { };
 
         # Add LDAP dependencies that aren't currently found within nixpkgs.
         perlPackages = prev.perlPackages // {
@@ -563,11 +579,14 @@
               (if lib.versionAtLeast lib.version "20.03pre"
               then nlohmann_json
               else nlohmann_json.override { multipleHeaders = true; })
+              prometheus-cpp
             ];
 
           checkInputs = [
             cacert
-            foreman
+            # FIXME: foreman is broken on all nix/nixpkgs pin, up to and
+            # including 2.7.0
+            newNixpkgs.legacyPackages.${final.system}.foreman
             glibcLocales
             libressl.nc
             openldap
