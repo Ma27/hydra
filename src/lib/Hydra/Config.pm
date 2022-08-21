@@ -13,7 +13,8 @@ our @EXPORT = qw(
     getLDAPConfigAmbient
 );
 
-our %configGeneralOpts = (-UseApacheInclude => 1, -IncludeAgain => 1, -IncludeRelative => 1);
+my @path = qw(/var/secrets);
+our %configGeneralOpts = (-UseApacheInclude => 1, -IncludeAgain => 1, -IncludeRelative => 1, -ConfigPath => \@path);
 
 my $hydraConfigCache;
 
