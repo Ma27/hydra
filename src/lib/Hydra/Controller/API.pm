@@ -135,7 +135,7 @@ sub queue : Chained('api') PathPart('queue') Args(0) {
     };
     unless ($c->user_exists) {
         $criteria->{"project.private"} = 0;
-        $extra->{join} = { "jobset" => "project" };
+        $extra->{join} = {"jobset" => "project"};
     }
 
     my @builds = $c->model('DB::Builds')->search($criteria, $extra);

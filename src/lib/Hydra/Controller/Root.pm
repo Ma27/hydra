@@ -131,7 +131,7 @@ sub queue_GET {
     };
     unless ($c->user_exists) {
         $criteria->{"project.private"} = 0;
-        $extra->{join} = { "jobset" => "project" };
+        $extra->{join} = {"jobset" => "project"};
     }
     $c->stash->{template} = 'queue.tt';
     $c->stash->{flashMsg} //= $c->flash->{buildMsg};
@@ -171,22 +171,20 @@ sub status :Local :Args(0) :ActionClass('REST') { }
 sub status_GET {
     my ($self, $c) = @_;
     my $criteria = { "buildsteps.busy" => { '!=', 0 } };
-    my $extra =
-        { order_by => ["globalpriority DESC", "id"],
-          columns => [@buildListColumns]
-        };
+    my $join = ["buildsteps"];
     unless ($c->user_exists) {
         $criteria->{"project.private"} = 0;
-        $extra->{join} = ["buildsteps", {jobset => "project"}];
-    } else {
-        $extra->{join} = ["buildsteps"];
+        push @{$join}, {"jobset" => "project"};
     }
 
     $self->status_ok(
         $c,
         entity => [$c->model('DB::Builds')->search(
             $criteria,
-            $extra)]
+            { order_by => ["globalpriority DESC", "id"],
+              join => $join,
+              columns => [@buildListColumns]
+            })]
     );
 }
 
@@ -465,7 +463,7 @@ sub steps :Local Args(0) {
 
     unless ($c->user_exists) {
         $criteria->{"project.private"} = 0;
-        $extra->{join} = {"build" => { jobset => "project"}};
+        $extra->{join} = [{"build" => {"jobset" => "project"}}];
     }
 
     $c->stash->{page} = $page;
@@ -531,7 +529,7 @@ sub search :Local Args(0) {
             $projectCriteria->{private} = 0;
             $jobsetCriteria->{"project.private"} = 0;
             $buildCriteria->{"project.private"} = 0;
-            push @{$buildSearchExtra->{join}}, { jobset => "project" };
+            push @{$buildSearchExtra->{join}}, {"jobset" => "project"};
             $outCriteria->{"project.private"} = 0;
             $drvCriteria->{"project.private"} = 0;
         }
