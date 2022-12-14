@@ -588,24 +588,22 @@ void State::dumpStatus(Connection & conn)
         root["nrActiveDbUpdates"] = nrActiveDbUpdates.load();
 
         {
-            auto nested = root["machines"];
             auto machines_(machines.lock());
             for (auto & i : *machines_) {
                 auto & m(i.second);
                 auto & s(m->state);
                 auto info(m->state->connectInfo.lock());
 
-                auto machine = nested[m->sshName] = {
-                    {"enabled",  m->enabled},
-                    {"systemTypes", m->systemTypes},
-                    {"supportedFeatures", m->supportedFeatures},
-                    {"mandatoryFeatures", m->mandatoryFeatures},
-                    {"nrStepsDone", s->nrStepsDone.load()},
-                    {"currentJobs", s->currentJobs.load()},
-                    {"disabledUntil", std::chrono::system_clock::to_time_t(info->disabledUntil)},
-                    {"lastFailure", std::chrono::system_clock::to_time_t(info->lastFailure)},
-                    {"consecutiveFailures", info->consecutiveFailures},
-                };
+                auto machine = json::object();
+                machine["enabled"] = m->enabled;
+                machine["systemTypes"] = m->systemTypes;
+                machine["supportedFeatures"] = m->supportedFeatures;
+                machine["mandatoryFeatures"] = m->mandatoryFeatures;
+                machine["nrStepsDone"] = s->nrStepsDone.load();
+                machine["currentJobs"] = s->currentJobs.load();
+                machine["disabledUntil"] = std::chrono::system_clock::to_time_t(info->disabledUntil);
+                machine["lastFailure"] = std::chrono::system_clock::to_time_t(info->lastFailure);
+                machine["consecutiveFailures"] = info->consecutiveFailures;
 
                 if (s->currentJobs == 0)
                     machine["idleSince"] = s->idleSince.load();
@@ -615,11 +613,13 @@ void State::dumpStatus(Connection & conn)
                     machine["avgStepTime"] = (float) s->totalStepTime / s->nrStepsDone;
                     machine["avgStepBuildTime"] = (float) s->totalStepBuildTime / s->nrStepsDone;
                 }
+
+                root["machines"][m->sshName] = machine;
             }
         }
 
         {
-            auto jobsets_json = root["jobsets"];
+            auto jobsets_json = json::object();
             auto jobsets_(jobsets.lock());
             for (auto & jobset : *jobsets_) {
                 jobsets_json[jobset.first.first + ":" + jobset.first.second] = {
@@ -627,10 +627,11 @@ void State::dumpStatus(Connection & conn)
                     {"seconds", jobset.second->getSeconds()},
                 };
             }
+            root["jobsets"] = jobsets_json;
         }
 
         {
-            auto machineTypesJson = root["machineTypes"];
+            auto machineTypesJson = json::object();
             auto machineTypes_(machineTypes.lock());
             for (auto & i : *machineTypes_) {
                 auto machineTypeJson = machineTypesJson[i.first] = {
@@ -643,6 +644,7 @@ void State::dumpStatus(Connection & conn)
                 if (i.second.running == 0)
                     machineTypeJson["lastActive"] = std::chrono::system_clock::to_time_t(i.second.lastActive);
             }
+            root["machineTypes"] = machineTypesJson;
         }
 
         auto store = getDestStore();
