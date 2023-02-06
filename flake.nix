@@ -2,7 +2,7 @@
   description = "A Nix-based continuous build system";
 
   inputs.nixpkgs.follows = "nix/nixpkgs";
-  inputs.nix.url = "github:ma27/nix/2.13.2-fix-initNix-in-perl-bindings";
+  inputs.nix.url = "github:nixos/nix/2.13-maintenance";
 
   outputs = { self, nixpkgs, nix }:
     let

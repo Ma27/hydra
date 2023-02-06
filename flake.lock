@@ -23,16 +23,16 @@
         "nixpkgs-regression": "nixpkgs-regression"
       },
       "locked": {
-        "lastModified": 1675350053,
-        "narHash": "sha256-t+PYIggXPt2p2Uzn4MUnwDX5+xnVLKai+MTvKRzmpIE=",
-        "owner": "ma27",
+        "lastModified": 1675514340,
+        "narHash": "sha256-JjnneK+TkhkxFoh6EEVKAzEBdxz0iucZsJ6+PWTTReQ=",
+        "owner": "nixos",
         "repo": "nix",
-        "rev": "f696364b2c9e27295c1d93689c4908d8dcd28dbd",
+        "rev": "9157f94e775936798c1f8783eab929e77904e5ed",
         "type": "github"
       },
       "original": {
-        "owner": "ma27",
-        "ref": "2.13.2-fix-initNix-in-perl-bindings",
+        "owner": "nixos",
+        "ref": "2.13-maintenance",
         "repo": "nix",
         "type": "github"
       }
