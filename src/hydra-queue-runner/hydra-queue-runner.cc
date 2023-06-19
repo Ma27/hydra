@@ -626,7 +626,6 @@ void State::dumpStatus(Connection & conn)
                     {"seconds", jobset.second->getSeconds()},
                 };
             }
-            root["jobsets"] = jobsets_json;
         }
 
         {
@@ -643,7 +642,6 @@ void State::dumpStatus(Connection & conn)
                 if (i.second.running == 0)
                     machineTypeJson["lastActive"] = std::chrono::system_clock::to_time_t(i.second.lastActive);
             }
-            root["machineTypes"] = machineTypesJson;
         }
 
         auto store = getDestStore();
