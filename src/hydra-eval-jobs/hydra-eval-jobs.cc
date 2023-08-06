@@ -16,7 +16,6 @@
 #include "attr-path.hh"
 #include "derivations.hh"
 #include "local-fs-store.hh"
-#include "value/context.hh"
 
 #include "hydra-config.hh"
 
@@ -101,14 +100,7 @@ static std::string queryMetaStrings(EvalState & state, DrvInfo & drv, const std:
         else if (v.type() == nAttrs) {
             auto a = v.attrs->find(state.symbols.create(subAttribute));
             if (a != v.attrs->end())
-                res.push_back(std::string(state.forceString(
-                    *a->value,
-                    v.determinePos(noPos),
-                    fmt(
-                        "while evaluating attribute %s",
-                        subAttribute
-                    )
-                )));
+                res.push_back(std::string(state.forceString(*a->value)));
         }
     };
 
@@ -205,38 +197,26 @@ static void worker(
 
                 /* If this is an aggregate, then get its constituents. */
                 auto a = v->attrs->get(state.symbols.create("_hydraAggregate"));
-                auto errorCtx = fmt("while evaluating _hydraAggregate of %s", job["nixName"]);
-                if (a && state.forceBool(*a->value, a->pos, errorCtx)) {
+                if (a && state.forceBool(*a->value, a->pos)) {
                     auto a = v->attrs->get(state.symbols.create("constituents"));
                     if (!a)
                         throw EvalError("derivation must have a ‘constituents’ attribute");
 
 
-                    NixStringContext context;
-                    state.coerceToString(
-                        a->pos,
-                        *a->value,
-                        context,
-                        fmt("while evaluating item of constituents for job %s", job["nixName"]),
-                        true,
-                        false
-                    );
+                    PathSet context;
+                    state.coerceToString(a->pos, *a->value, context, true, false);
+                    for (auto & i : context)
+                        if (i.at(0) == '!') {
+                            size_t index = i.find("!", 1);
+                            job["constituents"].push_back(std::string(i, index + 1));
+                        }
 
-                    for (auto & ctx : context) {
-                        std::visit(overloaded {
-                            [&](const NixStringContextElem::Built & b) {
-                                job["constituents"].push_back(state.store->printStorePath(b.drvPath));
-                            },
-                            [&](auto) {}
-                        }, ctx);
-                    }
-
-                    state.forceList(*a->value, a->pos, fmt("while evaluating constituents of %s", job["nixName"]));
+                    state.forceList(*a->value, a->pos);
                     for (unsigned int n = 0; n < a->value->listSize(); ++n) {
                         auto v = a->value->listElems()[n];
                         state.forceValue(*v, noPos);
                         if (v->type() == nString)
-                            job["namedConstituents"].push_back(state.forceStringNoCtx(*v, noPos, "while evaluating constituents"));
+                            job["namedConstituents"].push_back(state.forceStringNoCtx(*v));
                     }
                 }
 

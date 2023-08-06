@@ -161,9 +161,9 @@ void State::parseMachines(const std::string & contents)
            same name. */
         auto i = oldMachines.find(machine->sshName);
         if (i == oldMachines.end())
-            printMsg(lvlChatty, "adding new machine ‘%1%’", machine->sshName);
+            printMsg(lvlChatty, format("adding new machine ‘%1%’") % machine->sshName);
         else
-            printMsg(lvlChatty, "updating machine ‘%1%’", machine->sshName);
+            printMsg(lvlChatty, format("updating machine ‘%1%’") % machine->sshName);
         machine->state = i == oldMachines.end()
             ? std::make_shared<Machine::State>()
             : i->second->state;
@@ -173,7 +173,7 @@ void State::parseMachines(const std::string & contents)
     for (auto & m : oldMachines)
         if (newMachines.find(m.first) == newMachines.end()) {
             if (m.second->enabled)
-                printMsg(lvlInfo, "removing machine ‘%1%’", m.first);
+                printMsg(lvlInfo, format("removing machine ‘%1%’") % m.first);
             /* Add a disabled Machine object to make sure stats are
                maintained. */
             auto machine = std::make_shared<Machine>(*(m.second));
@@ -930,6 +930,7 @@ int main(int argc, char * * argv)
         });
 
         settings.verboseBuild = true;
+        settings.lockCPU = false;
 
         State state{metricsAddrOpt};
         if (status)
