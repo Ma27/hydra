@@ -74,6 +74,17 @@ sub findBuildStepByDrvPath {
 
 sub build :Chained('buildChain') :PathPart('') :Args(0) :ActionClass('REST') { }
 
+sub isValidPathNixCLI {
+    my $path = shift;
+    my $pid = fork();
+    if (!$pid) {
+        open STDERR, ">", "/dev/null";
+        exec "nix", "path-info", $path, "--store", getStoreUri();
+    }
+    waitpid $pid, 0;
+    return $? == 0;
+}
+
 sub build_GET {
     my ($self, $c) = @_;
 
@@ -83,7 +94,7 @@ sub build_GET {
     $c->stash->{isLocalStore} = isLocalStore();
     $c->stash->{available} =
         $c->stash->{isLocalStore}
-        ? all { isValidPath($_->path) } $build->buildoutputs->all
+        ? all { isValidPathNixCLI($_->path) } $build->buildoutputs->all
         : 1;
     $c->stash->{drvAvailable} = isValidPath $build->drvpath;
 
