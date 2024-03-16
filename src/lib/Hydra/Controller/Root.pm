@@ -183,7 +183,7 @@ sub status_GET {
             $criteria,
             { order_by => ["globalpriority DESC", "id"],
               join => $join,
-              columns => [@buildListColumns]
+              columns => [@buildListColumns, 'buildsteps.drvpath', 'buildsteps.type']
             })]
     );
 }
