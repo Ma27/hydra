@@ -502,20 +502,69 @@ int main(int argc, char * * argv)
         auto store = openStore();
 
         std::set<std::string> namedConstituentsJobs;
+        std::map<std::string, std::set<std::string>> expandedConstituents;
+        std::map<std::string, std::unordered_map<std::string, std::string>> brokenChildJobs;
         for (auto i = state->jobs.begin(); i != state->jobs.end(); ++i) {
             auto jobName = i.key();
             auto & job = i.value();
 
-            if (job.find("namedConstituents") != job.end()) {
+            auto named = job.find("namedConstituents");
+            if (named != job.end()) {
+                bool globConstituents = job.value<bool>("globConstituents", false);
+                std::unordered_map<std::string, std::string> brokenJobs;
+
+                auto isBroken = [&brokenJobs, &jobName](
+                        const std::string & childJobName, nlohmann::json & job) -> bool {
+                    if (job.find("error") != job.end()) {
+                        std::string error = job["error"];
+                        printError("aggregate job '%s' references broken job '%s': %s", jobName, childJobName, error);
+                        brokenJobs[childJobName] = error;
+                        return true;
+                    } else {
+                        return false;
+                    }
+                };
+
+                std::set<std::string> results;
+                for (const std::string & childJobName : *named) {
+                    auto childJob = state->jobs.find(childJobName);
+                    if (childJob == state->jobs.end()) {
+                        if (!globConstituents) {
+                            printError("aggregate job '%s' references non-existent job '%s'", jobName, childJobName);
+                            brokenJobs[childJobName] = "does not exist";
+                        } else {
+                            bool expansionFound = false;
+                            for (auto job = state->jobs.begin(); job != state->jobs.end(); job++) {
+                                auto jobName = job.key();
+                                if (fnmatch(childJobName.c_str(), jobName.c_str(), 0) == 0
+                                    && !isBroken(jobName, *job)
+                                    && childJobName != jobName
+                                ) {
+                                    results.insert(jobName);
+                                    expansionFound = true;
+                                }
+                            }
+                            if (!expansionFound) {
+                                warn("aggregate job '%s' references constituent glob pattern '%s' with no matches", jobName, childJobName);
+                                brokenJobs[childJobName] = "constituent glob pattern had no matches";
+                            }
+                        }
+                    } else if (!isBroken(childJobName, *childJob)) {
+                        results.insert(childJobName);
+                    }
+                }
+
                 namedConstituentsJobs.insert(jobName);
+                expandedConstituents.insert({jobName, results});
+                brokenChildJobs.insert({jobName, brokenJobs});
             }
         }
 
         auto aggregatesWithNamedConstituents = topoSort(
             namedConstituentsJobs,
-            {[&namedConstituentsJobs, &state](const std::string & jobName) {
+            {[&namedConstituentsJobs, &state, &expandedConstituents](const std::string & jobName) {
                 if (namedConstituentsJobs.find(jobName) != namedConstituentsJobs.end()) {
-                    return std::set<std::string>(state->jobs[jobName]["namedConstituents"]);
+                    return expandedConstituents.at(jobName);
                 } else {
                     return std::set<std::string>();
                 }
@@ -528,77 +577,24 @@ int main(int argc, char * * argv)
         std::reverse(aggregatesWithNamedConstituents.begin(), aggregatesWithNamedConstituents.end());
 
         for (auto & jobName : aggregatesWithNamedConstituents) {
+            auto brokenJobs = brokenChildJobs.at(jobName);
             auto & job = state->jobs[jobName];
-            printError("FOO: %s", jobName);
-            bool globConstituents = job.value<bool>("globConstituents", false);
-            auto named = job.find("namedConstituents");
-
-            std::unordered_map<std::string, std::string> brokenJobs;
-            auto isBroken = [&brokenJobs, &jobName](
-                    const std::string & childJobName, nlohmann::json & job) -> bool {
-                if (job.find("error") != job.end()) {
-                    std::string error = job["error"];
-                    printError("aggregate job '%s' references broken job '%s': %s", jobName, childJobName, error);
-                    brokenJobs[childJobName] = error;
-                    return true;
-                } else {
-                    return false;
-                }
-            };
-            auto getNonBrokenJobsOrRecordError = [&state, &isBroken, &jobName, &brokenJobs, &globConstituents](
-                    const std::string & childJobName) -> std::vector<nlohmann::json> {
-                auto childJob = state->jobs.find(childJobName);
-                std::vector<nlohmann::json> results;
-                if (childJob == state->jobs.end()) {
-                    if (!globConstituents) {
-                        printError("aggregate job '%s' references non-existent job '%s'", jobName, childJobName);
-                        brokenJobs[childJobName] = "does not exist";
-                    } else {
-                        for (auto job = state->jobs.begin(); job != state->jobs.end(); job++) {
-                            auto jobName = job.key();
-                            if (fnmatch(childJobName.c_str(), jobName.c_str(), 0) == 0
-                                && !isBroken(jobName, *job)
-                            ) {
-                                results.push_back(*job);
-                            }
-                        }
-                        if (results.empty()) {
-                            warn("aggregate job '%s' references constituent glob pattern '%s' with no matches", jobName, childJobName);
-                            brokenJobs[childJobName] = "constituent glob pattern had no matches";
-                        }
-                    }
-                } else if (!isBroken(childJobName, *childJob)) {
-                    results.push_back(*childJob);
-                }
-                return results;
-            };
-
             if (myArgs.dryRun) {
-                for (std::string jobName2 : *named) {
-                    auto foundJobs = getNonBrokenJobsOrRecordError(jobName2);
-                    if (foundJobs.empty()) {
-                        continue;
-                    }
-                    for (auto & childJob : foundJobs) {
-                        std::string constituentDrvPath = childJob["drvPath"];
-                        job["constituents"].push_back(constituentDrvPath);
-                    }
+                auto foundJobs = expandedConstituents.at(jobName);
+                for (auto & childJobName : foundJobs) {
+                    std::string constituentDrvPath = state->jobs[childJobName]["drvPath"];
+                    job["constituents"].push_back(constituentDrvPath);
                 }
             } else {
                 auto drvPath = store->parseStorePath((std::string) job["drvPath"]);
                 auto drv = store->readDerivation(drvPath);
 
-                for (std::string jobName2 : *named) {
-                    auto foundJobs = getNonBrokenJobsOrRecordError(jobName2);
-                    if (foundJobs.empty()) {
-                        continue;
-                    }
-                    for (auto & childJob : foundJobs) {
-                        auto childDrvPath = store->parseStorePath((std::string) childJob["drvPath"]);
-                        auto childDrv = store->readDerivation(childDrvPath);
-                        job["constituents"].push_back(store->printStorePath(childDrvPath));
-                        drv.inputDrvs.map[childDrvPath].value = {childDrv.outputs.begin()->first};
-                    }
+                auto foundJobs = expandedConstituents.at(jobName);
+                for (auto & childJobName : foundJobs) {
+                    auto childDrvPath = store->parseStorePath((std::string) state->jobs[childJobName]["drvPath"]);
+                    auto childDrv = store->readDerivation(childDrvPath);
+                    job["constituents"].push_back(store->printStorePath(childDrvPath));
+                    drv.inputDrvs.map[childDrvPath].value = {childDrv.outputs.begin()->first};
                 }
 
                 if (brokenJobs.empty()) {

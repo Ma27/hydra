@@ -16,6 +16,8 @@ my ($res, $stdout, $stderr) = captureStdoutStderr(60,
     ("hydra-eval-jobset", $jobsetCtx->{"project"}->name, $jobset->name)
 );
 
+print STDERR "HIER: $stdout\n$stderr\n";
+
 subtest "non_match_aggregate failed" => sub {
     ok(utf8::decode($stderr), "Stderr output is UTF8-clean");
     like(
@@ -48,11 +50,11 @@ subtest "basic globbing works" => sub {
     is($sortedConstituentNames[1], "empty-dir-B", "second constituent of 'ok_aggregate' is 'empty-dir-B'");
 };
 
-#subtest "transitivity is OK" => sub {
-    #ok(defined $builds->{"indirect_aggregate"}, "'indirect_aggregate' is part of the jobset evaluation");
-    #my @constituents = $builds->{"indirect_aggregate"}->constituents->all;
-    #is(1, scalar @constituents, "'indirect_aggregate' has one constituent");
-    #is($constituents[0]->nixname, "direct_aggregate", "'indirect_aggregate' has 'direct_aggregate' as single constituent");
-#};
+subtest "transitivity is OK" => sub {
+    ok(defined $builds->{"indirect_aggregate"}, "'indirect_aggregate' is part of the jobset evaluation");
+    my @constituents = $builds->{"indirect_aggregate"}->constituents->all;
+    is(1, scalar @constituents, "'indirect_aggregate' has one constituent");
+    is($constituents[0]->nixname, "direct_aggregate", "'indirect_aggregate' has 'direct_aggregate' as single constituent");
+};
 
 done_testing;
