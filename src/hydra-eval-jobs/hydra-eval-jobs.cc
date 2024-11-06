@@ -21,6 +21,7 @@
 #include "local-fs-store.hh"
 
 #include "hydra-config.hh"
+#include "topo-sort.hh"
 
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -500,14 +501,37 @@ int main(int argc, char * * argv)
            dependencies of the aggregate derivation. */
         auto store = openStore();
 
+        std::set<std::string> namedConstituentsJobs;
         for (auto i = state->jobs.begin(); i != state->jobs.end(); ++i) {
             auto jobName = i.key();
             auto & job = i.value();
 
-            auto named = job.find("namedConstituents");
-            if (named == job.end()) continue;
+            if (job.find("namedConstituents") != job.end()) {
+                namedConstituentsJobs.insert(jobName);
+            }
+        }
 
+        auto aggregatesWithNamedConstituents = topoSort(
+            namedConstituentsJobs,
+            {[&namedConstituentsJobs, &state](const std::string & jobName) {
+                if (namedConstituentsJobs.find(jobName) != namedConstituentsJobs.end()) {
+                    return std::set<std::string>(state->jobs[jobName]["namedConstituents"]);
+                } else {
+                    return std::set<std::string>();
+                }
+            }},
+            {[&](const std::string & a, const std::string & b) {
+                return Error("foo");
+            }}
+        );
+
+        std::reverse(aggregatesWithNamedConstituents.begin(), aggregatesWithNamedConstituents.end());
+
+        for (auto & jobName : aggregatesWithNamedConstituents) {
+            auto & job = state->jobs[jobName];
+            printError("FOO: %s", jobName);
             bool globConstituents = job.value<bool>("globConstituents", false);
+            auto named = job.find("namedConstituents");
 
             std::unordered_map<std::string, std::string> brokenJobs;
             auto isBroken = [&brokenJobs, &jobName](
